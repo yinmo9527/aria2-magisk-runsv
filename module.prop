@@ -2,5 +2,5 @@ id=aria2-runsv
 name=aria2 (runsv)
 version=1.37.0-r1
 versionCode=1370001
-author=aria2-runsv contributors
+author=yinmo9527
 description=aria2 download daemon as a runsv service for runsvdir-magisk. RPC and AriaNg ready, session persistence, state and downloads on shared storage.

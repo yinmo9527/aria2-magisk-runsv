@@ -214,11 +214,15 @@ mount 变体在安装/更新后没有立即重启。重启手机后挂载才生�
 - `Build`：手动触发，只产出工件，可指定 aria2 版本
 - `Build and Release`：打 tag `v1.37.0-r1` 或手动触发，构建 8 个 ZIP、发 Release、并把 `update/<variant>/<abi>.json` 提交回默认分支
 
-改自己的仓库后记得同步这三处：
+本仓库默认指向 `yinmo9527/aria2-magisk-runsv`：
 
-1. `module.prop` 的 `author`
-2. `package.sh` 里的 `UPDATE_BASE`（CI 里用环境变量传入，本地构建留空就不会写 `updateJson`）
-3. `revision` 文件，每次改模块脚本时加 1 —— 版本号是 `<aria2 版本>-r<revision>`，`versionCode` 由它算出
+- `module.prop` 的 `author` 已设为 `yinmo9527`
+- 发版时 CI 会把 `UPDATE_BASE` 自动设成 `https://raw.githubusercontent.com/yinmo9527/aria2-magisk-runsv/main`
+
+fork 到别处，或者改仓库名之后，记得同步这两处（本地构建不传 `UPDATE_BASE` 就不会写 `updateJson`，不影响使用）。
+
+维护时还有一个约定：改模块脚本就把 `revision` 文件加 1 —— 版本号是 `<aria2 版本>-r<revision>`，
+`versionCode` 由它算出，不加的话管理器不会认为有新版本。
 
 ### 本地
 

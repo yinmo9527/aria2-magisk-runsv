@@ -201,11 +201,16 @@ After a system upgrade that rotates the trust store, hit **rebuild CA bundle** �
 - `Build` — manual, artifacts only, optional aria2 version
 - `Build and Release` — on tag `v1.37.0-r1` or manual: builds all 8 ZIPs, publishes a release, commits `update/<variant>/<abi>.json` back to the default branch
 
-When you fork this, update:
+This repository targets `yinmo9527/aria2-magisk-runsv`:
 
-1. `author` in `module.prop`
-2. `UPDATE_BASE` in `package.sh` (the workflow passes it in; leaving it empty for local builds skips `updateJson`)
-3. `revision` — bump it whenever module scripts change; the version is `<aria2 version>-r<revision>` and `versionCode` is derived from it
+- `author` in `module.prop` is already `yinmo9527`
+- on release the workflow sets `UPDATE_BASE` to `https://raw.githubusercontent.com/yinmo9527/aria2-magisk-runsv/main`
+
+If you fork it or rename the repo, update those two. Local builds that do not pass `UPDATE_BASE` simply skip
+`updateJson` and work fine.
+
+One convention to keep: bump the `revision` file whenever module scripts change — the version is
+`<aria2 version>-r<revision>` and `versionCode` is derived from it, so without a bump the manager will not see an update.
 
 ### Locally
 

@@ -6,7 +6,7 @@
 # 用法：
 #   ./package.sh                          # 全架构 × 全部变体
 #   ./package.sh arm64-v8a                # 只打某个架构
-#   UPDATE_BASE=https://raw.githubusercontent.com/<你>/<仓库>/main ./package.sh
+#   UPDATE_BASE=https://raw.githubusercontent.com/yinmo9527/aria2-magisk-runsv/main ./package.sh
 #
 # 设置 UPDATE_BASE 时会把 updateJson 写进 module.prop，模块管理器据此检查更新。
 #
