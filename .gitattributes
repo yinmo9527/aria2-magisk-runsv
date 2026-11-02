@@ -1,0 +1,8 @@
+# 全部文本文件统一 LF 行尾：Android 的 /system/bin/sh 不认 CRLF，
+# 而且 CI 在 Linux 上打包，行尾不一致会直接让服务起不来。
+* text=auto eol=lf
+
+# 二进制保持原样
+*.zip binary
+*.png binary
+*.so binary
