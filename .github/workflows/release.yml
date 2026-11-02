@@ -96,10 +96,12 @@ jobs:
             done
           done
 
-          if git diff --quiet -- update; then
+          # 先 add 再比较：首次发版时 update/*.json 还是未跟踪文件，
+          # git diff 看不到它们，会误判成"没有变化"而跳过提交。
+          git add update
+          if git diff --cached --quiet; then
             echo "=> update 元数据没有变化"
             exit 0
           fi
-          git add update
           git commit -m "chore(update): $MODULE_VERSION"
           git push origin "$BRANCH"
