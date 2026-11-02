@@ -219,11 +219,18 @@ Needs `bash`, `curl`, `unzip` and `zip`; on Windows Git Bash (no `zip`) the scri
 
 ## License
 
-- This repository (scripts, packaging): MIT, see [LICENSE](LICENSE)
-- aria2: GPLv2, see [docs/aria2-COPYING](docs/aria2-COPYING), source at <https://github.com/aria2/aria2>
-- Bundled OpenSSL license: [docs/aria2-LICENSE.OpenSSL](docs/aria2-LICENSE.OpenSSL)
+**This repository's code (scripts, installer, packaging) is MIT**, see [LICENSE](LICENSE).
+
+**The bundled `aria2c` is not MIT** — it is GPL-2.0-or-later. Where to get its source is documented in
+[docs/aria2-SOURCE.md](docs/aria2-SOURCE.md). The two are separate works shipped on the same medium (the scripts
+`exec` the binary; nothing is linked into a single program), which is the "mere aggregation" case of GPLv2 §2, so
+MIT does not get pulled into GPL. Just do not describe the ZIP as "MIT-licensed software" as a whole.
+
+- aria2 license text: [docs/aria2-COPYING](docs/aria2-COPYING)
 - Upstream Android build notes: [docs/aria2-README.android](docs/aria2-README.android)
-- runit binaries: BSD 3-Clause, via [runsvdir-magisk](https://github.com/sorubedo/runsvdir-magisk)
+- OpenSSL 1.1.1k statically linked into the binary: [docs/aria2-LICENSE.OpenSSL](docs/aria2-LICENSE.OpenSSL)
+- runit binaries (`runsvdir`/`sv`/`chpst`/`svlogd`) are **not** shipped here; they come from
+  [runsvdir-magisk](https://github.com/sorubedo/runsvdir-magisk), BSD 3-Clause
 
 ## Credits
 

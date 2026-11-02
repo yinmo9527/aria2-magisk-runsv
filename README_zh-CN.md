@@ -232,11 +232,16 @@ mount 变体在安装/更新后没有立即重启。重启手机后挂载才生�
 
 ## 许可
 
-- 本仓库（模块脚本、打包流程）：MIT，见 [LICENSE](LICENSE)
-- aria2 本体：GPLv2，见 [docs/aria2-COPYING](docs/aria2-COPYING)，源码见 <https://github.com/aria2/aria2>
-- 随包分发的 OpenSSL：见 [docs/aria2-LICENSE.OpenSSL](docs/aria2-LICENSE.OpenSSL)
-- aria2 官方 Android 构建的使用说明：[docs/aria2-README.android](docs/aria2-README.android)
-- runit 二进制：BSD 3-Clause，来自 [runsvdir-magisk](https://github.com/sorubedo/runsvdir-magisk)
+**本仓库的代码（脚本、安装器、打包流程）是 MIT**，见 [LICENSE](LICENSE)。
+
+**ZIP 里的 `aria2c` 不是 MIT**，它是 GPL-2.0-or-later，源码获取方式见 [docs/aria2-SOURCE.md](docs/aria2-SOURCE.md)。
+两者是同一介质上的独立作品（脚本用 `exec` 启动二进制，没有链接成一个程序），属于 GPLv2 §2 允许的聚合，
+所以 MIT 不会被传染；但对外描述这个包时别说成"纯 MIT"。
+
+- aria2 许可证全文：[docs/aria2-COPYING](docs/aria2-COPYING)
+- aria2 官方 Android 构建说明：[docs/aria2-README.android](docs/aria2-README.android)
+- 二进制里静态链接的 OpenSSL 1.1.1k：[docs/aria2-LICENSE.OpenSSL](docs/aria2-LICENSE.OpenSSL)
+- runit 二进制（`runsvdir`/`sv`/`chpst`/`svlogd`）**不随本模块分发**，由 [runsvdir-magisk](https://github.com/sorubedo/runsvdir-magisk) 提供，BSD 3-Clause
 
 ## 致谢
 
