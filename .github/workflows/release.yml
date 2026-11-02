@@ -1,0 +1,105 @@
+name: Build and Release
+
+# 打 tag（v1.37.0-r1）或手动触发时：构建全部 ZIP、发 GitHub Release，
+# 并把 update/<variant>/<abi>.json 提交回默认分支，供模块管理器检查更新。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "aria2 版本（留 auto 取上游最新）"
+        required: true
+        default: auto
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 拉取 aria2 二进制
+        env:
+          VERSION: ${{ github.event.inputs.version || 'auto' }}
+        run: bash fetch.sh "${VERSION:-auto}"
+
+      - name: 打包（带 updateJson）
+        env:
+          UPDATE_BASE: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.repository.default_branch }}
+        run: bash package.sh
+
+      - name: 读取模块版本
+        id: ver
+        run: |
+          set -a; . out/build.env; set +a
+          echo "version=$MODULE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$MODULE_VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "tag=v$MODULE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: 发布 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "=> $TAG 已存在，改为追加/覆盖工件"
+            gh release upload "$TAG" out/*.zip out/SHA256SUMS --clobber
+          else
+            gh release create "$TAG" out/*.zip out/SHA256SUMS \
+              --title "aria2-runsv $VERSION" \
+              --notes "aria2 $VERSION 的 runsv Magisk 模块。
+
+          - 2 个变体：mount（挂载 /system/bin，shell 用户，数据在共享存储）/ nomount（服务目录内，root）
+          - 4 个架构：arm64-v8a、armeabi-v7a、x86_64、x86
+          - 刷入前请先安装 runsvdir-magisk
+
+          校验值见 SHA256SUMS。"
+          fi
+
+      - name: 更新模块更新元数据
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          set -a; . out/build.env; set +a
+          TAG="v$MODULE_VERSION"
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          CL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
+          BRANCH="${{ github.event.repository.default_branch }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BRANCH"
+          git checkout -B "$BRANCH" "origin/$BRANCH"
+
+          for variant in mount nomount; do
+            mkdir -p "update/$variant"
+            for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+              jq -n \
+                --arg v "$MODULE_VERSION" \
+                --argjson vc "$MODULE_VERSION_CODE" \
+                --arg url "$BASE/aria2-runsv-$MODULE_VERSION-$variant-$abi.zip" \
+                --arg cl "$CL" \
+                '{version: $v, versionCode: $vc, zipUrl: $url, changelog: $cl}' \
+                > "update/$variant/$abi.json"
+              echo "ok: update/$variant/$abi.json"
+            done
+          done
+
+          if git diff --quiet -- update; then
+            echo "=> update 元数据没有变化"
+            exit 0
+          fi
+          git add update
+          git commit -m "chore(update): $MODULE_VERSION"
+          git push origin "$BRANCH"

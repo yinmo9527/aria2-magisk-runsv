@@ -1,0 +1,52 @@
+name: Build
+
+# 手动构建，只产出 ZIP 工件，不动 release、不写 update 元数据。
+# 正式发版走 release.yml。
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "aria2 版本（留 auto 取上游最新）"
+        required: true
+        default: auto
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 拉取 aria2 二进制
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: bash fetch.sh "${VERSION:-auto}"
+
+      - name: 打包（2 变体 × 4 架构）
+        run: bash package.sh
+
+      - name: 构建摘要
+        run: |
+          set -a; . out/build.env; set +a
+          {
+            echo "## aria2-runsv $MODULE_VERSION"
+            echo
+            echo "- aria2 上游: $ARIA2_VERSION"
+            echo "- 变体: mount, nomount"
+            echo "- 架构: arm64-v8a, armeabi-v7a, x86_64, x86"
+            echo
+            echo '```text'
+            cat out/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传工件
+        uses: actions/upload-artifact@v4
+        with:
+          name: aria2-runsv-${{ github.run_number }}
+          path: |
+            out/*.zip
+            out/SHA256SUMS
+            out/build.env
+            out/upstream-versions.env
+          if-no-files-found: error

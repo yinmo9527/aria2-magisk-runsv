@@ -1,0 +1,5 @@
+/bin/
+/out/
+*.zip
+.DS_Store
+Thumbs.db

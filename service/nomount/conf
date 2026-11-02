@@ -1,0 +1,38 @@
+# aria2 runsv 服务设置 —— "nomount" 变体。
+# 这个文件由 ./run（以 root 身份）读取，也可以在模块操作菜单里被读取。
+# 修改后重启服务生效： sv restart /data/adb/runsvdir/service/aria2
+
+# 状态目录：aria2.conf、会话文件、DHT 缓存、CA 证书包、下载文件都在这里。
+# 相对路径以服务目录 /data/adb/runsvdir/service/aria2 为准。
+DATA_DIR="./data"
+DOWNLOAD_DIR="./downloads"
+
+# 以什么身份运行。这个变体不降权，以 root 运行，写出来的文件属主是 root；
+# 需要和 adb/文件管理器共享文件时改用 mount 变体。
+# 想降权可以写成 ":uid:gid[:补充 gid...]"，例如 ":2000:2000:1028:1015:1023:1078"。
+RUN_AS=""
+
+# aria2 二进制，就在服务目录里，不占用系统分区。
+BIN="./bin/aria2c"
+
+# RPC 端口。
+RPC_PORT=6800
+
+# 1 = 监听所有网卡（电脑上的 AriaNg 可以直连），0 = 只监听 127.0.0.1。
+RPC_LISTEN_ALL=1
+
+# RPC 密钥。留空表示使用同目录下自动生成的 rpc-secret 文件（推荐，
+# 更新模块不会覆盖它）。想自己指定就直接写在引号里。
+RPC_SECRET=""
+
+# 追加到命令行的额外参数，按空格切分，不支持引号嵌套。例如：
+#   EXTRA_ARGS="--max-overall-download-limit=1M --bt-tracker=udp://tracker.opentrackr.org:1337/announce"
+EXTRA_ARGS=""
+
+# 只有 musl 静态构建（非 arm64 架构）才需要：musl 读不到 Android 的 DNS 配置，
+# 必须显式给出 DNS 服务器，否则域名解析会失败。arm64 走系统 DNS，保持为空。
+DNS_SERVERS=""
+
+# 1 = 等 /sdcard 解密完成再启动。只有把 DATA_DIR / DOWNLOAD_DIR 改到共享
+# 存储上时才需要。
+WAIT_DECRYPT=0

@@ -1,0 +1,23 @@
+#!/system/bin/sh
+# aria2 的 runsv 日志子服务：把主服务的标准输出交给 svlogd 落盘。
+# 日志位置：/data/adb/runsvdir/log/sv/aria2/current
+# 这个脚本在容器里以 root 运行，和主服务的降权互不影响。
+
+# runsv 继承的是 runsvdir 的环境，PATH 不一定包含 /system/bin；
+# 后面 chpst 要 exec 的 toybox applet 都靠它，先兜底。
+export PATH="/system/bin:/system/xbin:${PATH:-/sbin}"
+
+LOG_DIR=/data/adb/runsvdir/log/sv/aria2
+
+mkdir -p "$LOG_DIR"
+
+# svlogd 从日志目录里的 config 读取轮转规则：
+#   s10485760  单个文件上限 10 MiB
+#   n5         最多保留 5 个历史文件
+# 不写这个文件的话 svlogd 会一直往 current 里追加，最终撑爆 /data。
+[ -f "$LOG_DIR/config" ] || printf 's10485760\nn5\n' > "$LOG_DIR/config"
+
+SVLOGD=/system/bin/svlogd
+[ -x "$SVLOGD" ] || SVLOGD=svlogd
+
+exec "$SVLOGD" -tt "$LOG_DIR"

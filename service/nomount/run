@@ -1,0 +1,157 @@
+#!/system/bin/sh
+# aria2 runsv 服务（主服务）—— "nomount" 变体。
+#
+# 二进制就在服务目录里，不挂载任何系统路径，也不需要 /sdcard：
+# 状态和下载都留在 /data/adb/runsvdir/service/aria2 下，适合纯后台/服务器式
+# 用法。设置在同目录的 ./conf 里，改完 sv restart 即可，不必重刷模块。
+exec 2>&1
+
+cd "$(dirname "$0")" || exit 1
+
+# runsv 继承的是 runsvdir 的环境，PATH 不一定包含 /system/bin；
+# 后面 chpst 要 exec 的 toybox applet 都靠它，先兜底。
+export PATH="/system/bin:/system/xbin:${PATH:-/sbin}"
+
+if [ ! -f ./conf ]; then
+    echo "aria2(runsv): ./conf 不存在，无法启动"
+    sleep 15
+    exit 1
+fi
+. ./conf
+
+: "${BIN:=./bin/aria2c}"
+: "${DATA_DIR:=./data}"
+: "${DOWNLOAD_DIR:=./downloads}"
+: "${RPC_PORT:=6800}"
+: "${RPC_LISTEN_ALL:=1}"
+: "${RPC_SECRET:=}"
+: "${RPC_SECRET_FILE:=./rpc-secret}"
+: "${DNS_SERVERS:=}"
+: "${EXTRA_ARGS:=}"
+: "${WAIT_DECRYPT:=0}"
+: "${RUN_AS:=}"
+
+SVCDIR="$PWD"
+DEFAULTS="$SVCDIR/defaults/aria2.conf"
+
+# chpst 是 runit 的一个 applet，runsvdir-magisk 会把它装到 /system/bin。
+CHPST=/system/bin/chpst
+[ -x "$CHPST" ] || CHPST=chpst
+
+# 降权后执行的 tee 也要用绝对路径，避免 PATH 里找不到。
+TEE=/system/bin/tee
+[ -x "$TEE" ] || TEE=tee
+
+# RUN_AS 为空表示保持 root；否则由 chpst 完成 setgroups + setgid + setuid。
+run_as() {
+    if [ -n "$RUN_AS" ]; then
+        "$CHPST" -u "$RUN_AS" "$@"
+    else
+        "$@"
+    fi
+}
+
+# --- 等共享存储可用 -------------------------------------------------------
+if [ "$WAIT_DECRYPT" != "0" ]; then
+    if [ "$(getprop sys.user.0.ce_available)" != "true" ]; then
+        echo "aria2(runsv): 共享存储尚未解密，10 秒后重试"
+        sleep 10
+        exit 1
+    fi
+fi
+
+if [ ! -x "$BIN" ]; then
+    echo "aria2(runsv): 找不到可执行的 $BIN"
+    echo "aria2(runsv): 请确认安装包架构与本机一致，或重新刷入本模块"
+    sleep 15
+    exit 1
+fi
+
+# --- 状态目录 -------------------------------------------------------------
+run_as mkdir -p "$DATA_DIR/session" "$DATA_DIR/dht" "$DATA_DIR/ca"
+if [ ! -d "$DATA_DIR/session" ]; then
+    echo "aria2(runsv): 无法创建 $DATA_DIR（权限或存储未就绪）"
+    sleep 10
+    exit 1
+fi
+
+CONF="$DATA_DIR/aria2.conf"
+if [ ! -f "$CONF" ] && [ -f "$DEFAULTS" ]; then
+    # 模板在 /data/adb 下，只有 root 读得到；写入又必须由目标用户完成，
+    # 所以 root 读、降权后的 tee 写。
+    if cat "$DEFAULTS" | run_as "$TEE" "$CONF" > /dev/null 2>&1 && [ -s "$CONF" ]; then
+        echo "aria2(runsv): 已生成默认配置 $CONF"
+    else
+        echo "aria2(runsv): 无法写入 $CONF，将使用内置默认值"
+    fi
+fi
+
+SESSION="$DATA_DIR/session/aria2.session"
+[ -f "$SESSION" ] || run_as touch "$SESSION"
+
+# --- CA 证书包 ------------------------------------------------------------
+# aria2 静态链接的 OpenSSL 不知道 Android 把根证书放在哪，所以这里把系统
+# 证书库和 Conscrypt apex 里的证书拼成一个 PEM 包。系统更新后可以在模块
+# 操作菜单里点“重建 CA 证书库”。
+CA_FILE="$DATA_DIR/ca/cacert.pem"
+if [ ! -s "$CA_FILE" ]; then
+    echo "aria2(runsv): 正在从系统证书库生成 CA 证书包"
+    for d in /system/etc/security/cacerts /apex/com.android.conscrypt/cacerts; do
+        [ -d "$d" ] || continue
+        cat "$d"/*.0 2>/dev/null
+    done | run_as "$TEE" "$CA_FILE" > /dev/null
+    if [ -s "$CA_FILE" ]; then
+        echo "aria2(runsv): CA 证书包就绪（$(wc -c < "$CA_FILE") 字节）"
+    else
+        echo "aria2(runsv): 警告：系统证书库为空，HTTPS 下载会失败"
+    fi
+fi
+
+# --- RPC 密钥 -------------------------------------------------------------
+# 密钥文件丢了就补一个：RPC 默认对所有网卡开放，空密钥等于谁都能控制下载。
+if [ -z "$RPC_SECRET" ]; then
+    if [ ! -s "$RPC_SECRET_FILE" ]; then
+        SECRET="$(head -n 1 /proc/sys/kernel/random/uuid 2>/dev/null)"
+        [ -n "$SECRET" ] || SECRET="$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
+        [ -n "$SECRET" ] || SECRET="$(date +%s)$$"
+        printf '%s\n' "$SECRET" > "$RPC_SECRET_FILE" 2>/dev/null
+        chmod 0600 "$RPC_SECRET_FILE" 2>/dev/null
+        echo "aria2(runsv): 已生成新的 RPC 密钥 $RPC_SECRET_FILE"
+    fi
+    RPC_SECRET="$(head -n 1 "$RPC_SECRET_FILE" 2>/dev/null)"
+fi
+if [ -z "$RPC_SECRET" ]; then
+    echo "aria2(runsv): 警告：RPC 没有密钥，局域网内任何设备都能控制下载"
+fi
+
+# --- 组装命令行 -----------------------------------------------------------
+# 用 set -- 而不是拼接字符串，路径里有空格也不会被拆开。
+set -- --conf-path="$CONF" \
+       --dir="$DOWNLOAD_DIR" \
+       --input-file="$SESSION" \
+       --save-session="$SESSION" \
+       --save-session-interval=30 \
+       --auto-save-interval=30 \
+       --dht-file-path="$DATA_DIR/dht/dht.dat" \
+       --enable-rpc=true \
+       --rpc-listen-port="$RPC_PORT" \
+       --rpc-allow-origin-all=true
+
+[ "$RPC_LISTEN_ALL" != "0" ] && set -- "$@" --rpc-listen-all=true
+[ -n "$RPC_SECRET" ] && set -- "$@" --rpc-secret="$RPC_SECRET"
+[ -s "$CA_FILE" ] && set -- "$@" --ca-certificate="$CA_FILE"
+[ -n "$DNS_SERVERS" ] && set -- "$@" --async-dns=true --async-dns-server="$DNS_SERVERS"
+
+# EXTRA_ARGS 就是一段按空格切分的命令行片段，故意不加引号。
+[ -n "$EXTRA_ARGS" ] && set -- "$@" $EXTRA_ARGS
+
+export HOME="$DATA_DIR"
+TZ_VALUE="$(getprop persist.sys.timezone)"
+[ -n "$TZ_VALUE" ] && export TZ="$TZ_VALUE"
+
+echo "aria2(runsv): 启动 $BIN  端口 $RPC_PORT  下载目录 $DOWNLOAD_DIR"
+
+if [ -n "$RUN_AS" ]; then
+    exec "$CHPST" -u "$RUN_AS" "$BIN" "$@"
+fi
+exec "$BIN" "$@"

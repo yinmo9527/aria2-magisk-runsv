@@ -1,0 +1,44 @@
+# aria2 runsv 服务设置 —— "mount" 变体。
+# 这个文件由 ./run（以 root 身份）读取，也可以在模块操作菜单里被读取。
+# 修改后重启服务生效： sv restart /data/adb/runsvdir/service/aria2
+
+# 状态目录：aria2.conf、会话文件、DHT 缓存、CA 证书包都放在这里。
+# 必须放在共享存储上，因为 aria2 会降权到 shell 用户，读不到 /data/adb。
+DATA_DIR="/storage/emulated/0/Android/aria2"
+
+# 下载目录。
+DOWNLOAD_DIR="/storage/emulated/0/Download/aria2"
+
+# 以什么身份运行，写法是 chpst 的数字形式 ":uid:gid[:补充 gid...]"。
+# 用数字可以完全跳过 /etc/passwd 和 /etc/group 查找，Android 各版本都稳。
+#   2000 shell
+#   1028 sdcard_r   1015 sdcard_rw   1023 media_rw   1078 external_storage
+# 这样写出来的文件属于 shell 用户（和 adb push、Termux 一样），
+# 文件管理器、MTP、相册都能正常改名和删除。
+# 想让 aria2 以 root 运行，把这一行改成 RUN_AS=""
+RUN_AS=":2000:2000:1028:1015:1023:1078"
+
+# aria2 二进制。这个变体由模块提供并挂载到 /system/bin，
+# 保证降权后的普通用户也能执行。
+BIN="/system/bin/aria2c"
+
+# RPC 端口。
+RPC_PORT=6800
+
+# 1 = 监听所有网卡（电脑上的 AriaNg 可以直连），0 = 只监听 127.0.0.1。
+RPC_LISTEN_ALL=1
+
+# RPC 密钥。留空表示使用同目录下自动生成的 rpc-secret 文件（推荐，
+# 更新模块不会覆盖它）。想自己指定就直接写在引号里。
+RPC_SECRET=""
+
+# 追加到命令行的额外参数，按空格切分，不支持引号嵌套。例如：
+#   EXTRA_ARGS="--max-overall-download-limit=1M --bt-tracker=udp://tracker.opentrackr.org:1337/announce"
+EXTRA_ARGS=""
+
+# 只有 musl 静态构建（非 arm64 架构）才需要：musl 读不到 Android 的 DNS 配置，
+# 必须显式给出 DNS 服务器，否则域名解析会失败。arm64 走系统 DNS，保持为空。
+DNS_SERVERS=""
+
+# 1 = 等 /sdcard 解密完成再启动（数据目录和下载目录都在共享存储上，必须等）。
+WAIT_DECRYPT=1
